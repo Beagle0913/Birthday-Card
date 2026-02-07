@@ -1078,6 +1078,9 @@
     cursorButterflyX = width / 2;
     cursorButterflyY = height / 2;
     window.addEventListener('resize', setSize);
+    window.addEventListener('orientationchange', function () {
+      setTimeout(setSize, 100);
+    });
     requestAnimationFrame(loop);
 
     function getCanvasCoords(e) {
@@ -1094,6 +1097,12 @@
       onPointerMove(p.x, p.y);
     });
     canvas.addEventListener('mouseleave', onPointerLeave);
+    canvas.addEventListener('touchstart', function (e) {
+      if (e.touches.length > 0) {
+        const p = getCanvasCoords(e);
+        onPointerMove(p.x, p.y);
+      }
+    }, { passive: true });
     canvas.addEventListener('touchmove', function (e) {
       e.preventDefault();
       const p = getCanvasCoords(e);
@@ -1108,6 +1117,7 @@
   const overlay = document.getElementById('tap-overlay');
   if (overlay) {
     function startAnimation() {
+      if (overlay.classList.contains('unwrapping') || overlay.classList.contains('hidden')) return;
       overlay.classList.add('unwrapping');
       setTimeout(function () {
         overlay.classList.add('hidden');
@@ -1115,7 +1125,10 @@
         if (!started) started = true;
       }, 720);
     }
-    overlay.addEventListener('click', startAnimation);
+    overlay.addEventListener('click', function (e) {
+      e.preventDefault();
+      startAnimation();
+    });
     overlay.addEventListener('touchstart', function (e) {
       e.preventDefault();
       startAnimation();

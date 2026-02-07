@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#c41e3a"/>
+  <defs>
+    <pattern id="stripes1" patternUnits="userSpaceOnUse" width="40" height="40" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="40" stroke="rgba(201,162,39,0.25)" stroke-width="4"/>
+    </pattern>
+    <pattern id="stripes2" patternUnits="userSpaceOnUse" width="40" height="40" patternTransform="rotate(-45)">
+      <line x1="0" y1="0" x2="0" y2="40" stroke="rgba(255,248,220,0.2)" stroke-width="4"/>
+    </pattern>
+    <pattern id="dots" patternUnits="userSpaceOnUse" width="24" height="24">
+      <circle cx="12" cy="12" r="1.5" fill="rgba(201,162,39,0.35)"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#stripes1)"/>
+  <rect width="1200" height="630" fill="url(#stripes2)"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+</svg>

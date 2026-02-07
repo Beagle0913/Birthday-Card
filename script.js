@@ -383,13 +383,18 @@
 
   function setSize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    width = window.innerWidth;
-    height = window.innerHeight;
+    var vv = window.visualViewport;
+    width = (vv && typeof vv.width === 'number') ? vv.width : window.innerWidth;
+    height = (vv && typeof vv.height === 'number') ? vv.height : window.innerHeight;
+    width = Math.max(1, Math.floor(width));
+    height = Math.max(1, Math.floor(height));
     canvas.width = width * dpr;
     canvas.height = height * dpr;
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    if (ctx) ctx.scale(dpr, dpr);
+    canvas.style.setProperty('width', width + 'px', 'important');
+    canvas.style.setProperty('height', height + 'px', 'important');
+    if (ctx) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     backgroundCache = null;
     staticVineLayer = null;
     screenButterflies.length = 0;
@@ -1081,6 +1086,9 @@
     window.addEventListener('orientationchange', function () {
       setTimeout(setSize, 100);
     });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', setSize);
+    }
     requestAnimationFrame(loop);
 
     function getCanvasCoords(e) {
@@ -1143,3 +1151,4 @@
     init();
   }
 })();
+

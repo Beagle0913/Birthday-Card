@@ -9,6 +9,11 @@
   let started = false;
   let startTime = 0;
   let animationStartTime = null;
+  let backgroundCache = null;
+  let staticVineLayer = null;
+  let staticTomatoNodes = [];
+  const FULL_GROWTH_TIME = 6;
+  let spriteCacheByMatrix = [];
 
   const palette = {
     cream: '#f5e6d3',
@@ -52,8 +57,9 @@
     return (matrixX + matrixY) % 2 === 0 ? base : (index === 3 ? palette.pinkLight : (index === 6 || index === 8 ? palette.greenLight : palette.green));
   }
 
-  function drawSprite(matrix, startX, startY, pixelSize, opts) {
+  function drawSprite(matrix, startX, startY, pixelSize, opts, targetCtx) {
     opts = opts || {};
+    const dc = targetCtx || ctx;
     const sway = opts.sway !== undefined ? opts.sway : 0;
     const swayRowFactor = opts.swayRowFactor || function () { return 1; };
     const rotation = opts.rotation !== undefined ? opts.rotation : 0;
@@ -62,11 +68,30 @@
     const centerX = startX + (cols * pixelSize) / 2;
     const centerY = startY + (rows * pixelSize) / 2;
 
+    const useCache = (sway === 0 || sway === undefined) && spriteCacheByMatrix.some(function (e) { return e.matrix === matrix; });
+    if (useCache) {
+      const entry = spriteCacheByMatrix.find(function (e) { return e.matrix === matrix; });
+      if (entry && entry.canvas) {
+        dc.save();
+        dc.imageSmoothingEnabled = false;
+        if (rotation !== 0) {
+          dc.translate(centerX, centerY);
+          dc.rotate(rotation);
+          dc.translate(-centerX, -centerY);
+        }
+        const w = entry.canvas.width;
+        const h = entry.canvas.height;
+        dc.drawImage(entry.canvas, 0, 0, w, h, startX, startY, w * pixelSize, h * pixelSize);
+        dc.restore();
+        return;
+      }
+    }
+
     if (rotation !== 0) {
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(rotation);
-      ctx.translate(-centerX, -centerY);
+      dc.save();
+      dc.translate(centerX, centerY);
+      dc.rotate(rotation);
+      dc.translate(-centerX, -centerY);
     }
     matrix.forEach(function (row, matrixY) {
       const rowSway = sway * swayRowFactor(matrixY, matrix.length);
@@ -76,11 +101,11 @@
         if (!color) return;
         const px = startX + matrixX * pixelSize + rowSway;
         const py = startY + matrixY * pixelSize;
-        ctx.fillStyle = color;
-        ctx.fillRect(px, py, pixelSize, pixelSize);
+        dc.fillStyle = color;
+        dc.fillRect(px, py, pixelSize, pixelSize);
       });
     });
-    if (rotation !== 0) ctx.restore();
+    if (rotation !== 0) dc.restore();
   }
 
   const TULIP_SPRITE = [
@@ -174,6 +199,38 @@
       [0, 0, 13, 1, 0]
     ]
   };
+
+  function renderMatrixToCanvas(matrix) {
+    const c = document.createElement('canvas');
+    c.width = matrix[0].length;
+    c.height = matrix.length;
+    const cctx = c.getContext('2d');
+    matrix.forEach(function (row, matrixY) {
+      row.forEach(function (pixel, matrixX) {
+        if (pixel === 0) return;
+        const color = getColorForPixel(pixel, matrixX, matrixY);
+        if (!color) return;
+        cctx.fillStyle = color;
+        cctx.fillRect(matrixX, matrixY, 1, 1);
+      });
+    });
+    return c;
+  }
+
+  function preRenderSprites() {
+    const sprites = [
+      VINE_SEGMENTS.TRUNK_KNOT,
+      VINE_SEGMENTS.TOMATO_CLUSTER,
+      VINE_SEGMENTS.LEAF_LUSH,
+      SUN_SPRITE,
+      VASE_SPRITE,
+      TULIP_SPRITE,
+      ROSE_SPRITE
+    ];
+    sprites.forEach(function (matrix) {
+      spriteCacheByMatrix.push({ matrix: matrix, canvas: renderMatrixToCanvas(matrix) });
+    });
+  }
 
   const LUSH_TOMATO_VINE = [
     [0, 0, 0, 0, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 0, 0],
@@ -333,6 +390,8 @@
     canvas.style.width = width + 'px';
     canvas.style.height = height + 'px';
     if (ctx) ctx.scale(dpr, dpr);
+    backgroundCache = null;
+    staticVineLayer = null;
     screenButterflies.length = 0;
   }
 
@@ -348,12 +407,16 @@
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
 
-  function drawBackground() {
+  function preRenderBackground() {
     const cw = canvas.width;
     const ch = canvas.height;
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.width = cw;
+    bgCanvas.height = ch;
+    const bgCtx = bgCanvas.getContext('2d');
     const creamRgb = parseHex(palette.cream);
     const creamDarkRgb = parseHex(palette.creamDark);
-    const id = ctx.getImageData(0, 0, cw, ch);
+    const id = bgCtx.getImageData(0, 0, cw, ch);
     const data = id.data;
     for (let py = 0; py < ch; py++) {
       const t = py / ch;
@@ -368,15 +431,21 @@
         data[i + 3] = 255;
       }
     }
-    ctx.putImageData(id, 0, 0);
+    bgCtx.putImageData(id, 0, 0);
+    backgroundCache = bgCanvas;
   }
 
-  const titleText = 'Su gimtadieniu mamuk';
-  const messageText = 'Ačiū už viską ką dėl manęs darai ir linkiu kuo daugiau nuveikti ateinančiais metais';
-  const signatureText = 'su meile tavo sūnus Džiugas';
+  function drawBackground() {
+    if (!backgroundCache) preRenderBackground();
+    ctx.drawImage(backgroundCache, 0, 0);
+  }
+
+  const titleText = 'Su gimtadieniu, Mamuk!';
+  const messageText = 'Ačiū už viską, ką dėl manęs darai, ir linkiu kuo daugiau nuveikti ateinančiais metais.';
+  const signatureText = 'Su meile, tavo sūnus Džiugas';
 
   function wrapText(text, maxWidth, fontSize) {
-    ctx.font = fontSize + 'px Silkscreen, monospace';
+    ctx.font = fontSize + 'px Lora, serif';
     const words = text.split(/\s+/);
     const lines = [];
     let line = '';
@@ -413,7 +482,7 @@
     if (titleAlpha > 0) {
       ctx.save();
       ctx.globalAlpha = titleAlpha;
-      ctx.font = titleSize + 'px Silkscreen, monospace';
+      ctx.font = '700 ' + titleSize + 'px Lora, serif';
       ctx.fillStyle = palette.brown;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -424,7 +493,7 @@
     if (messageAlpha > 0) {
       ctx.save();
       ctx.globalAlpha = messageAlpha;
-      ctx.font = messageSize + 'px Silkscreen, monospace';
+      ctx.font = messageSize + 'px Lora, serif';
       ctx.fillStyle = palette.brown;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -440,7 +509,7 @@
     if (signatureAlpha > 0) {
       ctx.save();
       ctx.globalAlpha = signatureAlpha;
-      ctx.font = sigSize + 'px Silkscreen, monospace';
+      ctx.font = 'italic ' + sigSize + 'px Lora, serif';
       ctx.fillStyle = palette.brown;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -449,7 +518,8 @@
     }
   }
 
-  function drawGround() {
+  function drawGround(targetCtx) {
+    const dc = targetCtx || ctx;
     const ps = PIXEL;
     const cols = Math.ceil(width / (ps * GRASS_ROW.length)) + 1;
     const grassY = height - ps * 3;
@@ -459,27 +529,47 @@
           if (pixel === 0) return;
           const color = getColorForPixel(pixel, matrixX + c * GRASS_ROW.length, row);
           if (!color) return;
-          ctx.fillStyle = color;
-          ctx.fillRect(c * GRASS_ROW.length * ps + matrixX * ps, grassY + row * ps, ps, ps);
+          dc.fillStyle = color;
+          dc.fillRect(c * GRASS_ROW.length * ps + matrixX * ps, grassY + row * ps, ps, ps);
         });
       }
     }
   }
 
-  function drawBorder() {
+  function drawBorder(targetCtx) {
+    const dc = targetCtx || ctx;
     const ps = PIXEL;
-    const sideRepeat = Math.ceil(height / (VINE_SIDE.length * ps));
-    for (let i = 0; i < sideRepeat; i++) {
-      VINE_SIDE.forEach(function (row, matrixY) {
-        row.forEach(function (pixel, matrixX) {
-          if (pixel === 0) return;
-          const color = getColorForPixel(pixel, matrixX, matrixY + i * VINE_SIDE.length);
-          if (!color) return;
-          ctx.fillStyle = color;
-          const y = (i * VINE_SIDE.length + matrixY) * ps;
-          ctx.fillRect(matrixX * ps, y, ps, ps);
-        });
-      });
+    const margin = 12;
+    const thick = 3;
+    const wobble = 2.5;
+    const freq = 0.02;
+    const w = width;
+    const h = height;
+    dc.fillStyle = palette.brown;
+
+    for (let x = margin; x < w - margin; x += ps) {
+      const wy = Math.sin(x * freq) * wobble;
+      for (let d = 0; d < thick; d++) {
+        dc.fillRect(Math.floor(x), Math.floor(margin + wy + d * ps), ps, ps);
+      }
+    }
+    for (let y = margin; y < h - margin; y += ps) {
+      const wx = Math.sin(y * freq) * wobble;
+      for (let d = 0; d < thick; d++) {
+        dc.fillRect(Math.floor(w - margin + wx - d * ps), Math.floor(y), ps, ps);
+      }
+    }
+    for (let x = w - margin; x > margin; x -= ps) {
+      const wy = Math.sin(x * freq) * wobble;
+      for (let d = 0; d < thick; d++) {
+        dc.fillRect(Math.floor(x), Math.floor(h - margin + wy - d * ps), ps, ps);
+      }
+    }
+    for (let y = h - margin; y > margin; y -= ps) {
+      const wx = Math.sin(y * freq) * wobble;
+      for (let d = 0; d < thick; d++) {
+        dc.fillRect(Math.floor(margin + wx + d * ps), Math.floor(y), ps, ps);
+      }
     }
   }
 
@@ -502,28 +592,57 @@
   }
 
   const VINE_GROWTH_RATE = 85;
+  const BRANCH_GROWTH_RATE = 55;
   const tomatoNodes = [];
 
-  function drawOrganicVine(path, elapsed, type, opts) {
+  function drawOrganicVine(path, elapsed, type, opts, targetCtx) {
     opts = opts || {};
+    const dc = targetCtx || ctx;
     const isBranch = opts.isBranch === true;
     const isBackground = opts.isBackground === true;
-    const steps = isBranch ? 120 : 300;
-    const baseSize = isBackground ? 5 : (isBranch ? 4 : 9);
+    const growthStartTime = opts.growthStartTime;
+    const branchScale = opts.branchScale != null ? opts.branchScale : 1;
+    const steps = isBackground ? 100 : (isBranch ? 120 : 280);
+    const baseSize = (isBackground ? 5 : (isBranch ? 4 : 9)) * (isBranch ? branchScale : 1);
     const taperN = 1.5;
-    const maxStep = isBranch ? steps : Math.min(steps, Math.max(0, Math.floor(elapsed * VINE_GROWTH_RATE)));
+    const effectiveElapsed = (growthStartTime != null) ? Math.max(0, elapsed - growthStartTime) : elapsed;
+    const maxStep = isBranch
+      ? Math.min(steps, Math.max(0, Math.floor(effectiveElapsed * BRANCH_GROWTH_RATE)))
+      : Math.min(steps, Math.max(0, Math.floor(elapsed * VINE_GROWTH_RATE)));
 
-    if (isBackground) ctx.globalAlpha = 0.45;
+    if (isBackground) dc.globalAlpha = 0.45;
     const wobbleMult = isBackground ? 0.4 : 1;
 
-    for (let i = 0; i <= maxStep; i += 3) {
+    function staticWobble(t) {
+      const lowFreq = Math.sin(t * 5) * 10 * wobbleMult;
+      const highFreq = Math.sin(t * 50) * 2 * wobbleMult;
+      return lowFreq + highFreq;
+    }
+
+    const silhouetteStep = 3;
+    const leftPoints = [];
+    const rightPoints = [];
+    for (let i = 0; i <= maxStep; i += silhouetteStep) {
       const t = i / steps;
       const pt = quadraticBezier(path.p0, path.p1, path.p2, t);
+      const tangent = quadraticBezierTangent(path.p0, path.p1, path.p2, t);
       const scale = baseSize * Math.pow(1 - t, taperN) + 1;
-      ctx.fillStyle = palette.greenDark;
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, scale * 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      const r = scale * 2.5;
+      const wobble = staticWobble(t);
+      const cx = pt.x + wobble;
+      const nx = -tangent.y;
+      const ny = tangent.x;
+      leftPoints.push({ x: cx - nx * r, y: pt.y - ny * r });
+      rightPoints.push({ x: cx + nx * r, y: pt.y + ny * r });
+    }
+    if (leftPoints.length > 1) {
+      dc.fillStyle = palette.greenDark;
+      dc.beginPath();
+      dc.moveTo(leftPoints[0].x, leftPoints[0].y);
+      for (let j = 1; j < leftPoints.length; j++) dc.lineTo(leftPoints[j].x, leftPoints[j].y);
+      for (let j = rightPoints.length - 1; j >= 0; j--) dc.lineTo(rightPoints[j].x, rightPoints[j].y);
+      dc.closePath();
+      dc.fill();
     }
 
     for (let i = 0; i <= maxStep; i++) {
@@ -534,15 +653,13 @@
       const scale = baseSize * Math.pow(1 - t, taperN) + 1;
       if (scale < 1) continue;
 
-      const lowFreq = Math.sin(t * 5 + elapsed * (0.2 * wobbleMult)) * 10 * wobbleMult;
-      const highFreq = Math.sin(t * 50) * 2 * wobbleMult;
-      const drawX = pt.x + lowFreq + highFreq;
+      const drawX = pt.x + staticWobble(t);
       const drawY = pt.y;
 
       const tw = VINE_SEGMENTS.TRUNK_KNOT[0].length * scale;
       drawSprite(VINE_SEGMENTS.TRUNK_KNOT, drawX - tw / 2, drawY - tw / 2, scale, {
         rotation: angle + Math.PI / 2
-      });
+      }, dc);
 
       if (i % 25 === 0 && t > 0.1) {
         const side = (i % 50 === 0) ? 1 : -1;
@@ -557,7 +674,7 @@
         const lh = VINE_SEGMENTS.LEAF_LUSH.length * clusterPs;
         drawSprite(VINE_SEGMENTS.LEAF_LUSH, gx - lw / 2, gy - lh / 2, clusterPs, {
           rotation: perpAngle
-        });
+        }, dc);
         if (type === 'tomato' && (i * 7) % 10 > 4) {
           const offDist2 = side * scale * 6;
           const gx2 = drawX + nx * offDist2 + tangent.x * 8;
@@ -566,26 +683,36 @@
           const tch = VINE_SEGMENTS.TOMATO_CLUSTER.length * clusterPs;
           drawSprite(VINE_SEGMENTS.TOMATO_CLUSTER, gx2 - tcw / 2, gy2 - tch / 2, clusterPs, {
             rotation: perpAngle
-          });
+          }, dc);
           if (!isBackground) tomatoNodes.push({ x: gx2, y: gy2 });
         }
       }
 
-      if (!isBranch && !isBackground && i % 60 === 0 && t > 0.3 && t < 0.8) {
-        const curl1 = ((i * 11) % 100) / 50 - 1;
-        const curl2 = ((i * 7) % 100) / 50 - 1;
+      if (!isBranch && !isBackground && i % 42 === 0 && t > 0.25 && t < 0.82) {
+        const growthStartTime = i / VINE_GROWTH_RATE;
+        const branchScaleVal = 1 - (t - 0.25) / 0.57 * 0.5;
+        const side = (i * 13) % 2 === 0 ? 1 : -1;
+        const angleOff = ((i * 17) % 41) / 41 * 0.7 - 0.35;
+        const branchAngle = angle + side * Math.PI / 2 + angleOff;
+        const dist1 = 55 + (i * 23) % 45;
+        const dist2 = 100 + (i * 19) % 70;
+        const p1x = drawX + Math.cos(branchAngle) * dist1 - Math.sin(angle) * 15;
+        const p1y = drawY + Math.sin(branchAngle) * dist1 + Math.cos(angle) * 15;
+        const bend = 0.15 + ((i * 7) % 20) / 20 * 0.25;
+        const p2x = p1x + Math.cos(branchAngle + bend) * dist2 + ((i * 11) % 30 - 15);
+        const p2y = p1y + Math.sin(branchAngle + bend) * dist2 - 20 - (i * 5) % 25;
         const branchPath = {
           p0: { x: drawX, y: drawY },
-          p1: { x: drawX + curl1 * 120, y: drawY - 80 },
-          p2: { x: drawX + curl2 * 220, y: drawY - 180 }
+          p1: { x: p1x, y: p1y },
+          p2: { x: p2x, y: p2y }
         };
-        drawOrganicVine(branchPath, elapsed, 'leaf', { isBranch: true });
+        drawOrganicVine(branchPath, elapsed, 'leaf', { isBranch: true, growthStartTime: growthStartTime, branchScale: branchScaleVal }, dc);
       }
     }
-    if (isBackground) ctx.globalAlpha = 1;
+    if (isBackground) dc.globalAlpha = 1;
   }
 
-  function drawTomatoPlant(elapsed) {
+  function drawTomatoPlant(elapsed, targetCtx) {
     const w = width;
     const h = height;
 
@@ -600,9 +727,15 @@
       p1: { x: w * 0.35, y: h * 0.85 },
       p2: { x: w * 0.55, y: h * 0.52 }
     };
+    const leftMidPath = {
+      p0: { x: w * 0.04, y: h },
+      p1: { x: w * 0.22, y: h * 0.6 },
+      p2: { x: w * 0.38, y: h * 0.4 }
+    };
 
-    drawOrganicVine(framingPath, elapsed, 'tomato');
-    drawOrganicVine(underlinePath, elapsed, 'tomato');
+    drawOrganicVine(framingPath, elapsed, 'tomato', undefined, targetCtx);
+    drawOrganicVine(underlinePath, elapsed, 'tomato', undefined, targetCtx);
+    drawOrganicVine(leftMidPath, elapsed, 'tomato', undefined, targetCtx);
   }
 
   function drawBouquet(elapsed) {
@@ -731,8 +864,18 @@
       });
     }
   }
+  function nodeKey(x, y) {
+    return Math.round(x / 8) * 8 + ',' + Math.round(y / 8) * 8;
+  }
+
   function drawScreenButterflies(elapsed) {
     initScreenButterflies();
+    const occupiedNodes = {};
+    screenButterflies.forEach(function (b, idx) {
+      if (b.landUntil > 0 && elapsed <= b.landUntil) {
+        occupiedNodes[nodeKey(b.landX, b.landY)] = true;
+      }
+    });
     screenButterflies.forEach(function (b, idx) {
       if (elapsed >= b.nextTargetTime) {
         b.targetX = 60 + (idx * 97 + Math.floor(elapsed) * 31) % (width - 120);
@@ -751,6 +894,7 @@
       let nearest = null;
       let nearestD = LAND_RADIUS + 1;
       tomatoNodes.forEach(function (node) {
+        if (occupiedNodes[nodeKey(node.x, node.y)]) return;
         const d = Math.hypot(b.x - node.x, b.y - node.y);
         if (d < nearestD) { nearestD = d; nearest = node; }
       });
@@ -760,11 +904,24 @@
         b.landY = nearest.y;
         b.x = nearest.x;
         b.y = nearest.y;
+        occupiedNodes[nodeKey(nearest.x, nearest.y)] = true;
         drawOneButterfly(b.x, b.y, elapsed, b.phase, b.variant, true);
         return;
       }
       b.x += (b.targetX - b.x) * 0.02;
       b.y += (b.targetY - b.y) * 0.02;
+      const minDist = 28;
+      screenButterflies.forEach(function (other, j) {
+        if (j === idx || (other.landUntil > 0 && elapsed <= other.landUntil)) return;
+        const dx = b.x - other.x;
+        const dy = b.y - other.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 0 && d < minDist) {
+          const nudge = (minDist - d) / d;
+          b.x += dx * nudge * 0.5;
+          b.y += dy * nudge * 0.5;
+        }
+      });
       drawOneButterfly(b.x, b.y, elapsed, b.phase, b.variant);
     });
   }
@@ -776,7 +933,8 @@
     drawOneButterfly(cursorButterflyX, cursorButterflyY, elapsed, 0, 0);
   }
 
-  function drawSun() {
+  function drawSun(targetCtx) {
+    const dc = targetCtx || ctx;
     const ps = 10;
     const x = Math.max(20, 0.04 * width);
     const y = Math.max(20, 0.05 * height);
@@ -786,7 +944,7 @@
     const cy = y + sunH / 2;
     const baseR = Math.max(sunW, sunH) / 2;
 
-    ctx.fillStyle = palette.gold;
+    dc.fillStyle = palette.gold;
     for (let ring = 1; ring <= 3; ring++) {
       const r = baseR + ring * 14;
       const steps = Math.max(24, Math.floor(r * 0.8));
@@ -796,13 +954,13 @@
         const px = cx + r * Math.cos(angle);
         const py = cy + r * Math.sin(angle);
         const haloPs = 4;
-        ctx.globalAlpha = 0.4 + (3 - ring) * 0.15;
-        ctx.fillRect(Math.floor(px - haloPs / 2), Math.floor(py - haloPs / 2), haloPs, haloPs);
+        dc.globalAlpha = 0.4 + (3 - ring) * 0.15;
+        dc.fillRect(Math.floor(px - haloPs / 2), Math.floor(py - haloPs / 2), haloPs, haloPs);
       }
     }
-    ctx.globalAlpha = 1;
+    dc.globalAlpha = 1;
 
-    drawSprite(SUN_SPRITE, x, y, ps);
+    drawSprite(SUN_SPRITE, x, y, ps, undefined, dc);
   }
 
   const confettiParticles = [];
@@ -853,26 +1011,43 @@
     });
   }
 
-  function drawScene(elapsed) {
-    tomatoNodes.length = 0;
+  function drawVineLayer(elapsed, targetCtx) {
+    const dc = targetCtx || ctx;
     const w = width;
     const h = height;
-    const bgPath1 = {
-      p0: { x: w * 0.12, y: h },
-      p1: { x: w * 0.15, y: h * 0.5 },
-      p2: { x: w * 0.4, y: h * 0.4 }
-    };
-    const bgPath2 = {
-      p0: { x: w * 0.04, y: h },
-      p1: { x: w * 0.25, y: h * 0.75 },
-      p2: { x: w * 0.5, y: h * 0.5 }
-    };
-    drawOrganicVine(bgPath1, elapsed, 'leaf', { isBackground: true });
-    drawOrganicVine(bgPath2, elapsed, 'leaf', { isBackground: true });
-    drawTomatoPlant(elapsed);
-    drawGround();
-    drawBorder();
-    drawSun();
+    const bgPath1 = { p0: { x: w * 0.12, y: h }, p1: { x: w * 0.15, y: h * 0.5 }, p2: { x: w * 0.4, y: h * 0.4 } };
+    const bgPath2 = { p0: { x: w * 0.04, y: h }, p1: { x: w * 0.25, y: h * 0.75 }, p2: { x: w * 0.5, y: h * 0.5 } };
+    drawOrganicVine(bgPath1, elapsed, 'leaf', { isBackground: true }, dc);
+    drawOrganicVine(bgPath2, elapsed, 'leaf', { isBackground: true }, dc);
+    const rightBgPath = { p0: { x: w * 0.98, y: h * 0.6 }, p1: { x: w * 0.75, y: h * 0.4 }, p2: { x: w * 0.55, y: h * 0.5 } };
+    drawOrganicVine(rightBgPath, elapsed, 'leaf', { isBackground: true }, dc);
+    drawTomatoPlant(elapsed, dc);
+    const rightPath1 = { p0: { x: w * 0.96, y: h }, p1: { x: w * 0.85, y: h * 0.5 }, p2: { x: w * 0.62, y: h * 0.35 } };
+    const rightPath2 = { p0: { x: w * 0.94, y: h * 0.85 }, p1: { x: w * 0.82, y: h * 0.6 }, p2: { x: w * 0.68, y: h * 0.55 } };
+    drawOrganicVine(rightPath1, elapsed, 'tomato', undefined, dc);
+    drawOrganicVine(rightPath2, elapsed, 'tomato', undefined, dc);
+    drawGround(dc);
+    drawBorder(dc);
+    drawSun(dc);
+  }
+
+  function drawScene(elapsed) {
+    tomatoNodes.length = 0;
+    if (staticVineLayer) {
+      ctx.drawImage(staticVineLayer, 0, 0);
+      tomatoNodes.push.apply(tomatoNodes, staticTomatoNodes);
+    } else {
+      drawVineLayer(elapsed, ctx);
+      if (elapsed >= FULL_GROWTH_TIME) {
+        staticVineLayer = document.createElement('canvas');
+        staticVineLayer.width = width * dpr;
+        staticVineLayer.height = height * dpr;
+        const staticCtx = staticVineLayer.getContext('2d');
+        staticCtx.scale(dpr, dpr);
+        drawVineLayer(FULL_GROWTH_TIME, staticCtx);
+        staticTomatoNodes = tomatoNodes.slice();
+      }
+    }
     drawBouquet(elapsed);
     drawSparkles(elapsed);
     drawScreenButterflies(elapsed);
@@ -899,6 +1074,7 @@
 
   function init() {
     setSize();
+    preRenderSprites();
     cursorButterflyX = width / 2;
     cursorButterflyY = height / 2;
     window.addEventListener('resize', setSize);

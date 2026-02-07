@@ -441,8 +441,8 @@
   }
 
   function drawBackground() {
-    if (!backgroundCache) preRenderBackground();
-    ctx.drawImage(backgroundCache, 0, 0);
+  if (!backgroundCache) preRenderBackground();
+  ctx.drawImage(backgroundCache, 0, 0, width, height);
   }
 
   const titleText = 'Su gimtadieniu, Mamuk!';
@@ -1039,8 +1039,9 @@
   function drawScene(elapsed) {
     tomatoNodes.length = 0;
     if (staticVineLayer) {
-      ctx.drawImage(staticVineLayer, 0, 0);
-      tomatoNodes.push.apply(tomatoNodes, staticTomatoNodes);
+    // Force the image to fit the logical width/height
+    ctx.drawImage(staticVineLayer, 0, 0, width, height); 
+    tomatoNodes.push.apply(tomatoNodes, staticTomatoNodes);
     } else {
       drawVineLayer(elapsed, ctx);
       if (elapsed >= FULL_GROWTH_TIME) {
@@ -1151,4 +1152,5 @@
     init();
   }
 })();
+
 

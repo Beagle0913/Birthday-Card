@@ -1,3 +1,8 @@
+---
+layout: default
+title: "Mnémotechniques + répétition – Initiation à la Génomique"
+---
+
 # Mnémotechniques + répétition – Initiation à la Génomique
 
 *Pas de palais mental : uniquement des **phrases / acronymes** et des **blocs à répéter** jusqu’à ce que les “caractères” deviennent nets. Une image = une courte phrase ou un sigle à revoir plusieurs fois.*
@@ -578,3 +583,4 @@ Réciter comme une comptine : **D4-140, M10-5k, S12-90k, L16-12, H23-3k**.
 ---
 
 *Document conçu pour une mémorisation par **reconnaissance** (cue + vérification, QCM), **auditif épisodique** (récitation à voix haute, même routine) et **encodage visuel par répétition** (même mise en page, drill visuel).*
+
